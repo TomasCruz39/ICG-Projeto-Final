@@ -113,7 +113,7 @@ function addBoxCollider(x, z, sx, sz) {
 	colliders.push({ minX: x - sx / 2, maxX: x + sx / 2, minZ: z - sz / 2, maxZ: z + sz / 2 });
 }
 
-// ================= CONSTRUTORES COM TEXTURAS DINÂMICAS =================
+// ================= CONSTRUTORES =================
 
 function addFloor(x, z, sx, sz, type = "grass") {
 	let colorA = "#2f7f3f", colorB = "#2a6f37";
@@ -128,6 +128,37 @@ function addFloor(x, z, sx, sz, type = "grass") {
 		new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0.02 })
 	);
 	mesh.position.set(x, -0.175, z);
+	mesh.receiveShadow = true;
+	addObject(mesh);
+}
+
+function addFloorWithHole(x, z, sx, sz, holeX, holeZ, holeRadius, type = "grass") {
+	let colorA = "#2f7f3f", colorB = "#2a6f37";
+	if (type === "dark") { colorA = "#266932"; colorB = "#215c2b"; }
+
+	const tex = makeCheckerTexture(colorA, colorB, 512, 16, 0.5, 0.5);
+
+	const shape = new THREE.Shape();
+	shape.moveTo(-sx/2, sz/2);
+	shape.lineTo(sx/2, sz/2);
+	shape.lineTo(sx/2, -sz/2);
+	shape.lineTo(-sx/2, -sz/2);
+	shape.lineTo(-sx/2, sz/2);
+
+	const holePath = new THREE.Path();
+	const hx = holeX - x;
+	const hz = z - holeZ; // Inversão necessária para o mapeamento 2D -> 3D
+	holePath.absarc(hx, hz, holeRadius, 0, Math.PI * 2, false);
+	shape.holes.push(holePath);
+
+	const geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.35, bevelEnabled: false, curveSegments: 32 });
+	geometry.rotateX(Math.PI / 2); // Deita o chão
+
+	const mesh = new THREE.Mesh(
+		geometry,
+		new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0.02 })
+	);
+	mesh.position.set(x, 0, z); // Topo colado ao 0
 	mesh.receiveShadow = true;
 	addObject(mesh);
 }
@@ -158,18 +189,22 @@ function addStartPad(x, z) {
 
 function setHole(x, z, radius = 0.42) {
 	hole.pos.set(x, 0, z); hole.radius = radius;
+	
+	// Aro de metal à volta do buraco
 	const ring = new THREE.Mesh(
-		new THREE.CylinderGeometry(radius * 1.22, radius * 1.22, 0.09, 28),
-		new THREE.MeshStandardMaterial({ color: 0x353d44, roughness: 0.45, metalness: 0.2 })
+		new THREE.TorusGeometry(radius, 0.025, 16, 32),
+		new THREE.MeshStandardMaterial({ color: 0x8f98a3, roughness: 0.45, metalness: 0.2 })
 	);
-	ring.position.set(x, 0.045, z); ring.receiveShadow = true;
+	ring.position.set(x, 0, z); ring.rotation.x = Math.PI / 2;
+	ring.receiveShadow = true;
 	addObject(ring);
 
+	// O fundo do copo
 	const cup = new THREE.Mesh(
-		new THREE.CylinderGeometry(radius, radius, hole.depth, 28, 1, true),
-		new THREE.MeshStandardMaterial({ color: 0x101317, roughness: 0.35, metalness: 0.05, side: THREE.DoubleSide })
+		new THREE.CylinderGeometry(radius, radius, hole.depth, 32, 1, false),
+		new THREE.MeshStandardMaterial({ color: 0x101317, roughness: 0.9, side: THREE.BackSide })
 	);
-	cup.position.set(x, -hole.depth / 2 + 0.02, z);
+	cup.position.set(x, -hole.depth / 2, z);
 	addObject(cup);
 }
 
@@ -237,14 +272,20 @@ function buildMapEasy() {
 	setBounds(-16, 16, -6, 6);
 	course.spawn.set(-14.2, ball.radius, 4.3);
 
-	addFloor(0, 0, 32, 12, "grass");
+	addFloorWithHole(0, 0, 32, 12, 14.1, 0, 0.46, "grass");
 
-	addWall(0, -5.75, 32, 0.5, 0.8); addWall(0, 5.75, 32, 0.5, 0.8);
-	addWall(-15.75, 0, 0.5, 12, 0.8); addWall(15.75, 0, 0.5, 12, 0.8);
+	// --- PAREDES EXTERIORES ---
+	addWall(0, -6.25, 33, 0.5, 0.8);   
+	addWall(0, 6.25, 33, 0.5, 0.8);    
+	addWall(-16.25, 0, 0.5, 12, 0.8);  
+	addWall(16.25, 0, 0.5, 12, 0.8);   
 
 	addStartPad(course.spawn.x, course.spawn.z);
+	
+	// Obstáculos estáticos do meio
 	addWall(0.5, -2.6, 1.7, 1.7, 1.0);
 	addWall(0.5, 2.6, 1.7, 1.7, 1.0);
+	
 	setHole(14.1, 0, 0.46);
 }
 
@@ -255,7 +296,7 @@ function buildMapMedium() {
 
 	addFloor(-10, 5, 12, 4, "grass");
 	addFloor(-2, 0, 4, 14, "dark");
-	addFloor(6, -5, 12, 4, "grass");
+	addFloorWithHole(6, -5, 12, 4, 10, -5, 0.44, "grass");
 
 	addWall(-8, 7.25, 17, 0.5);
 	addWall(-16.25, 5, 0.5, 5);
@@ -268,10 +309,8 @@ function buildMapMedium() {
 	addWall(6.25, -2.75, 12.5, 0.5);
 	addWall(0.25, 2.25, 0.5, 10.5);
 
-	addWall(-2.0, 1.25, 2.8, 0.1, 0.42);
-
 	addStartPad(course.spawn.x, course.spawn.z);
-	addMovingBar({ x: -2.0, z: 0, sx: 2.5, sy: 0.75, sz: 0.45, axis: "x", amplitude: 0.8, speed: 2.0 });
+	addMovingBar({ x: -2.0, z: -2, sx: 2.5, sy: 0.75, sz: 0.45, axis: "x", amplitude: 0.8, speed: 2.0 });
 
 	const texRamp = makeCheckerTexture("#9ca3af", "#8b95a1", 128, 4, 2, 2);
 	const ramp = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.42, 2.2), new THREE.MeshStandardMaterial({ map: texRamp, roughness: 0.7 }));
@@ -291,33 +330,30 @@ function buildMapHard() {
 	addFloor(2, 0, 10, 10, "dark"); 
 	addFloor(10, 0, 6, 2, "grass");  
 
-	const texIsland = makeCheckerTexture("#2f7f3f", "#2a6f37", 256, 16, 4, 4);
-	const island = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 0.35, 40), new THREE.MeshStandardMaterial({ map: texIsland, roughness: 0.82, metalness: 0.03 }));
-	island.position.set(15, -0.175, 0); island.receiveShadow = true;
+	// Ilha final usando ExtrudeGeometry perfurada
+	const texIsland = makeCheckerTexture("#2f7f3f", "#2a6f37", 512, 16, 0.5, 0.5);
+	const shape = new THREE.Shape();
+	shape.absarc(0, 0, 2.5, 0, Math.PI * 2, false);
+	const holePath = new THREE.Path();
+	holePath.absarc(0, 0, 0.46, 0, Math.PI * 2, false);
+	shape.holes.push(holePath);
+	const islandGeom = new THREE.ExtrudeGeometry(shape, { depth: 0.35, bevelEnabled: false, curveSegments: 36 });
+	islandGeom.rotateX(Math.PI / 2);
+	const island = new THREE.Mesh(islandGeom, new THREE.MeshStandardMaterial({ map: texIsland, roughness: 0.82, metalness: 0.03 }));
+	island.position.set(15, 0, 0); 
+	island.receiveShadow = true;
 	addObject(island);
 
-	// --- PAREDES ---
-
-	// Traseira do corredor inicial
+	// Paredes
 	addWall(-15.25, 0, 0.5, 5);       
-
-	// Paredes Horizontais do Corredor Inicial
 	addWall(-9.25, -2.25, 12.5, 0.5); 
 	addWall(-9.25, 2.25, 12.5, 0.5);  
-
-	// Paredes Verticais Esquerdas
 	addWall(-3.25, -3.75, 0.5, 3.5);  
 	addWall(-3.25, 3.75, 0.5, 3.5);   
-
-	// Paredes Horizontais Topo e Fundo da Praça Central
 	addWall(2, -5.25, 11, 0.5);       
 	addWall(2, 5.25, 11, 0.5);        
-
-	// Paredes Verticais Direitas
 	addWall(7.25, -3.25, 0.5, 4.5);   
 	addWall(7.25, 3.25, 0.5, 4.5);    
-
-	// Paredes da Ponte
 	addWall(10, -1.25, 6, 0.5);       
 	addWall(10, 1.25, 6, 0.5);        
 
@@ -485,6 +521,18 @@ function getFrictionMultiplier() {
 }
 
 function updateBall(dt) {
+	// Animação de queda no buraco quando ganha
+	if (game.won) {
+		const targetY = -hole.depth + ball.radius;
+		if (ball.position.y > targetY) {
+			ball.position.y = Math.max(targetY, ball.position.y - 2 * dt);
+			ball.position.x += (hole.pos.x - ball.position.x) * 8 * dt;
+			ball.position.z += (hole.pos.z - ball.position.z) * 8 * dt;
+			if (ball.mesh) ball.mesh.position.copy(ball.position);
+		}
+		return;
+	}
+
 	if (ball.isFalling) {
 		ball.position.y -= 8 * dt;
 		ball.position.addScaledVector(ball.velocity, dt);
@@ -499,8 +547,22 @@ function updateBall(dt) {
 
 	if (!ball.moving) return;
 
-	const prevX = ball.position.x; const prevZ = ball.position.z;
+	const prevX = ball.position.x; 
+	const prevZ = ball.position.z;
 	ball.position.addScaledVector(ball.velocity, dt);
+
+	// --- CORREÇÃO DA RAMPA (Barreira One-Way) ---
+	if (game.currentMap === 1) {
+		const backZ = 1.3; 
+		const margin = ball.radius;
+		if (ball.position.x > -3.4 && ball.position.x < -0.6) {
+			// Se a bola tentar entrar pela traseira da rampa (vinda de Z < 1.3)
+			if (prevZ <= backZ - margin && ball.position.z > backZ - margin) {
+				ball.position.z = backZ - margin;
+				ball.velocity.z *= -0.82; // Faz ricochete!
+			}
+		}
+	}
 
 	const baseDrag = 1.4;
 	const drag = baseDrag * getFrictionMultiplier();
@@ -523,8 +585,6 @@ function updateBall(dt) {
 	const toHole = tmpVecB.copy(hole.pos).sub(ball.position);
 	if (!game.won && Math.hypot(toHole.x, toHole.z) < hole.radius * 0.82 && ball.velocity.length() < 2.2) {
 		game.won = true; ball.moving = false; ball.velocity.set(0, 0, 0);
-		ball.position.x = hole.pos.x; ball.position.z = hole.pos.z;
-		ball.position.y = Math.max(0.05, ball.radius - hole.depth + 0.03);
 		message.innerHTML = `🏁 ${game.mapName} concluído!<br>Tacadas: <b>${game.strokes}</b><br><small>R = repetir | 1/2/3 = mapa</small>`;
 		message.classList.add("visible");
 	}
