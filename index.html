@@ -4,6 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mini-Golfe 3D — ICG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script type="importmap">
   {
     "imports": {
@@ -12,14 +15,22 @@
   }
   </script>
   <style>
-    :root { color-scheme: dark; }
+    :root {
+      color-scheme: dark;
+      --ink: #e9f7ff;
+      --muted: rgba(216, 231, 245, 0.7);
+      --panel: rgba(6, 10, 14, 0.78);
+      --panel-border: rgba(129, 170, 199, 0.25);
+      --accent: #5eead4;
+      --accent-2: #38bdf8;
+    }
     html, body {
       width: 100%;
       height: 100%;
       margin: 0;
       overflow: hidden;
       background: #0b1114;
-      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      font-family: "Space Grotesk", "Segoe UI", sans-serif;
     }
     canvas { display: block; }
     #hud {
@@ -29,14 +40,18 @@
       z-index: 10;
       padding: 10px 12px;
       border-radius: 10px;
-      background: rgba(0, 0, 0, 0.45);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: #dff4ff;
+      background: rgba(4, 8, 12, 0.55);
+      border: 1px solid rgba(143, 170, 189, 0.22);
+      color: var(--ink);
       font-size: 14px;
       line-height: 1.45;
       user-select: none;
       min-width: 290px;
       backdrop-filter: blur(4px);
+    }
+    #hud.hidden {
+      opacity: 0;
+      pointer-events: none;
     }
     #message {
       position: fixed;
@@ -45,7 +60,7 @@
       transform: translate(-50%, -50%);
       z-index: 20;
       font-size: clamp(22px, 4vw, 40px);
-      color: #f4fff8;
+      color: var(--ink);
       text-shadow: 0 0 10px rgba(0, 0, 0, 0.75);
       pointer-events: none;
       opacity: 0;
@@ -53,13 +68,192 @@
       text-align: center;
       padding: 16px 22px;
       border-radius: 12px;
-      background: rgba(0, 0, 0, 0.45);
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(6, 10, 14, 0.7);
+      border: 1px solid rgba(129, 170, 199, 0.28);
     }
     #message.visible { opacity: 1; }
+
+    #menu {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 28px 18px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 220ms ease;
+      background: radial-gradient(circle at 20% 20%, rgba(56, 189, 248, 0.08), transparent 45%),
+                  radial-gradient(circle at 80% 0%, rgba(94, 234, 212, 0.08), transparent 40%),
+                  rgba(6, 10, 14, 0.78);
+      backdrop-filter: blur(6px);
+    }
+    #menu.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .menu-panel {
+      width: min(980px, 96vw);
+      max-height: 92vh;
+      overflow: auto;
+      padding: 28px 26px;
+      border-radius: 20px;
+      color: var(--ink);
+      background: linear-gradient(135deg, rgba(10, 18, 24, 0.95), rgba(6, 10, 14, 0.92));
+      border: 1px solid var(--panel-border);
+      box-shadow: 0 30px 60px rgba(0, 0, 0, 0.45);
+    }
+    .menu-header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 24px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .menu-header h1 {
+      margin: 0 0 6px 0;
+      font-size: clamp(26px, 3.2vw, 38px);
+      letter-spacing: 0.4px;
+    }
+    .menu-subtitle {
+      margin: 0;
+      color: var(--muted);
+    }
+    .menu-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+    .badge {
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border: 1px solid rgba(94, 234, 212, 0.4);
+      color: var(--accent);
+      background: rgba(12, 20, 26, 0.8);
+    }
+    .menu-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-bottom: 18px;
+    }
+    .menu-section {
+      padding: 16px 16px 18px;
+      border-radius: 16px;
+      border: 1px solid rgba(94, 234, 212, 0.18);
+      background: rgba(8, 14, 20, 0.65);
+    }
+    .menu-section h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      letter-spacing: 0.3px;
+    }
+    .map-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+    }
+    .map-button {
+      display: grid;
+      gap: 4px;
+      text-align: left;
+    }
+    .map-button strong { font-size: 14px; }
+    .map-button span { font-size: 12px; color: var(--muted); }
+    .map-button small { font-size: 11px; color: var(--accent); }
+    .map-button.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(94, 234, 212, 0.2);
+    }
+    .score-grid {
+      display: grid;
+      gap: 10px;
+    }
+    .score-card {
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(129, 170, 199, 0.2);
+      background: rgba(9, 16, 22, 0.75);
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .score-card strong { color: var(--ink); }
+    .score-list { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+    .score-list li { display: flex; justify-content: space-between; }
+
+    .menu-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    button {
+      border: 1px solid rgba(94, 234, 212, 0.35);
+      background: rgba(10, 18, 24, 0.9);
+      color: var(--ink);
+      padding: 10px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    }
+    button:hover { transform: translateY(-1px); border-color: var(--accent); }
+    button.primary {
+      background: linear-gradient(120deg, rgba(94, 234, 212, 0.2), rgba(56, 189, 248, 0.18));
+      border-color: rgba(94, 234, 212, 0.6);
+      color: var(--ink);
+    }
+    button.ghost { border-color: rgba(129, 170, 199, 0.35); color: var(--muted); }
+    .menu-help {
+      font-size: 12px;
+      color: var(--muted);
+      display: grid;
+      gap: 6px;
+    }
+
+    @media (max-width: 720px) {
+      #hud { min-width: auto; }
+      .menu-panel { padding: 22px 18px; }
+      .menu-actions { flex-direction: column; align-items: stretch; }
+      button { width: 100%; }
+    }
   </style>
 </head>
 <body>
+  <div id="menu" class="menu visible">
+    <div class="menu-panel">
+      <div class="menu-header">
+        <div>
+          <h1>Mini-Golfe 3D</h1>
+          <p class="menu-subtitle">Percursos extra, física estilizada e recordes locais.</p>
+        </div>
+        <div class="menu-badges">
+          <span class="badge">ICG 25/26</span>
+          <span class="badge">Arena</span>
+        </div>
+      </div>
+      <div class="menu-grid">
+        <div class="menu-section">
+          <h2>Escolhe o Mapa</h2>
+          <div id="menu-maps" class="map-grid"></div>
+        </div>
+        <div class="menu-section">
+          <h2>Recordes Locais</h2>
+          <div id="menu-scores" class="score-grid"></div>
+        </div>
+      </div>
+      <div class="menu-actions">
+        <button id="menu-start" class="primary">Jogar</button>
+        <button id="menu-audio" class="ghost">Audio: On</button>
+        <button id="menu-reset-scores" class="ghost">Limpar recordes</button>
+      </div>
+      <div class="menu-help">
+        <div>Esc: menu · R: reiniciar · 1-5: mapas · F: Free Cam</div>
+        <div>Rato esquerdo: câmara · Rato direito: mira · Espaço/Enter: tacada</div>
+      </div>
+    </div>
+  </div>
   <div id="hud"></div>
   <div id="message"></div>
   <script type="module" src="./projeto.js"></script>
