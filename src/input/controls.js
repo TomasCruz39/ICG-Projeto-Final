@@ -35,7 +35,8 @@ function initControls() {
                 input.draggingCamera = false; input.draggingAim = false;
                 return;
             } else if (input.activeTouches.size === 1) {
-                // Um dedo: iniciar câmara ou mira consoante o modo ativo
+                // Um dedo: capturar o pointer e iniciar câmara ou mira consoante o modo ativo
+                try { renderer.domElement.setPointerCapture(e.pointerId); } catch (_) {}
                 input.activePointerId = e.pointerId;
                 input.prevX = e.clientX; input.prevY = e.clientY;
                 if (input.mobileAimMode) input.draggingAim = true;
