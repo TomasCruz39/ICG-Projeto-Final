@@ -1,3 +1,6 @@
+// Referências centralizadas aos elementos do DOM
+// Assim não fazemos getElementById espalhado por todo o código
+
 const hud = document.getElementById("hud");
 const message = document.getElementById("message");
 const menu = document.getElementById("menu");

@@ -1,3 +1,5 @@
+// Motor de física da bola: criação, tacada, colisões AABB, gravidade e deteção do buraco
+
 import * as THREE from "three";
 import { scene } from "../core/scene.js";
 import { message } from "../core/dom.js";
@@ -9,8 +11,6 @@ import {
     VOID_RESET_Y,
     colliders,
     movingObstacles,
-    frictionZones,
-    boostZones,
     floorZones,
     tmpVec,
     tmpVecB,
@@ -19,7 +19,7 @@ import {
 import { renderMenuMaps, renderMenuScores } from "../ui/menu.js";
 import { recordScore } from "../systems/scores.js";
 import { playSfx } from "../systems/audio.js";
-import { spawnImpactParticles, spawnSandSplash, spawnBoostParticles, startCelebration } from "../systems/particles.js";
+import { spawnImpactParticles, spawnSandSplash, startCelebration } from "../systems/particles.js";
 
 function createBall() {
     const ballMesh = new THREE.Mesh(
@@ -34,7 +34,8 @@ function resetBall() {
     ball.position.copy(course.spawn); ball.velocity.set(0, 0, 0);
     ball.moving = false; ball.restTimer = 0;
     ball.surfaceType = "grass";
-    ball.lastBoostZone = -1;
+    ball.lastImpactTime = -10;
+    ball.lastSandTime = -10;
     if (ball.mesh) { ball.mesh.position.copy(ball.position); ball.mesh.rotation.set(0, 0, 0); }
 }
 
@@ -46,6 +47,7 @@ function shoot() {
     playSfx("shot", game.power / game.maxPower);
 }
 
+// Conter a bola dentro dos limites do mapa com um ressalto amortecido
 function clampBallInsideBounds() {
     const margin = ball.radius + 0.1;
     if (ball.position.x < course.bounds.minX + margin) { ball.position.x = course.bounds.minX + margin; ball.velocity.x *= -0.85; }
@@ -54,6 +56,8 @@ function clampBallInsideBounds() {
     if (ball.position.z > course.bounds.maxZ - margin) { ball.position.z = course.bounds.maxZ - margin; ball.velocity.z *= -0.85; }
 }
 
+// Deteção e resolução de colisão entre a bola (esfera) e uma caixa AABB (eixo alinhado)
+// Calcula o ponto mais próximo na caixa e resolve a penetração com reflexão vetorial
 function resolveAABBCollision(box) {
     if (box.minY !== undefined && ball.position.y + ball.radius < box.minY) return false;
     if (box.maxY !== undefined && ball.position.y - ball.radius > box.maxY) return false;
@@ -64,7 +68,7 @@ function resolveAABBCollision(box) {
     let dz = ball.position.z - nearestZ;
 
     if (dx === 0 && dz === 0) {
-        // Ball center is inside the box
+        // Centro da bola está dentro da caixa — expulsar pelo lado mais próximo
         const distToMinX = ball.position.x - box.minX;
         const distToMaxX = box.maxX - ball.position.x;
         const distToMinZ = ball.position.z - box.minZ;
@@ -95,7 +99,7 @@ function resolveAABBCollision(box) {
 
         const dot = ball.velocity.x * nx + ball.velocity.z * nz;
         if (dot < 0) {
-            const bounce = 0.2; // smaller bounce when crushed inside
+            const bounce = 0.2; // bounce reduzido quando esmagado dentro da caixa
             ball.velocity.x -= (1 + bounce) * dot * nx;
             ball.velocity.z -= (1 + bounce) * dot * nz;
         }
@@ -105,6 +109,7 @@ function resolveAABBCollision(box) {
     const distSq = dx * dx + dz * dz;
     if (distSq >= ball.radius * ball.radius) return false;
 
+    // Resolver penetração: empurrar a bola para fora ao longo da normal
     const distance = Math.sqrt(Math.max(distSq, 1e-6));
     const overlap = ball.radius - distance;
     const nx = dx / distance;
@@ -113,6 +118,7 @@ function resolveAABBCollision(box) {
     ball.position.x += nx * overlap;
     ball.position.z += nz * overlap;
 
+    // Reflexão da velocidade na normal de colisão (com coeficiente de restituição)
     const dot = ball.velocity.x * nx + ball.velocity.z * nz;
     const impactSpeed = Math.abs(dot);
     if (dot < 0) {
@@ -127,7 +133,9 @@ function resolveAABBCollision(box) {
     return true;
 }
 
-function resolveWindmillCollision(obstacle) {
+// Colisão com obstáculo giratório: transforma a posição da bola para espaço local do obstáculo giratório,
+// testa as duas pás, e aplica a velocidade angular das pás como impulso adicional
+function resolveRotatingObstacleCollision(obstacle) {
     const relative = tmpVec.copy(ball.position).sub(obstacle.mesh.position);
     const local = relative.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -obstacle.mesh.rotation.y);
 
@@ -147,6 +155,7 @@ function resolveWindmillCollision(obstacle) {
         nxLocal = sign;
     }
 
+    // Converter de volta para espaço mundo
     const worldLocal = local.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), obstacle.mesh.rotation.y);
     ball.position.x = obstacle.mesh.position.x + worldLocal.x;
     ball.position.z = obstacle.mesh.position.z + worldLocal.z;
@@ -154,9 +163,11 @@ function resolveWindmillCollision(obstacle) {
     const normalLocal = new THREE.Vector3(nxLocal, 0, nzLocal);
     const normalWorld = normalLocal.applyAxisAngle(new THREE.Vector3(0, 1, 0), obstacle.mesh.rotation.y);
 
+    // Velocidade tangencial da pá no ponto de contacto (v = ω × r)
     const bladeVelX = obstacle.speed * worldLocal.z;
     const bladeVelZ = -obstacle.speed * worldLocal.x;
 
+    // Velocidade relativa bola-pá para calcular o impulso corretamente
     const relVelX = ball.velocity.x - bladeVelX;
     const relVelZ = ball.velocity.z - bladeVelZ;
 
@@ -175,20 +186,23 @@ function resolveWindmillCollision(obstacle) {
     }
 }
 
+// Despachar o tipo correto de colisão para cada obstáculo móvel
 function resolveObstacleCollision(obstacle) {
     if (obstacle.maxY !== undefined && ball.position.y - ball.radius > obstacle.maxY) return;
 
     if (obstacle.type === "slideBox") {
         const box = { minX: obstacle.mesh.position.x - obstacle.halfX, maxX: obstacle.mesh.position.x + obstacle.halfX, minZ: obstacle.mesh.position.z - obstacle.halfZ, maxZ: obstacle.mesh.position.z + obstacle.halfZ, maxY: obstacle.maxY };
         if (resolveAABBCollision(box)) {
+            // Transferir parte da velocidade do bloco deslizante para a bola
             if (obstacle.axis === "x") ball.velocity.x += (obstacle.velX || 0) * 0.55;
             else ball.velocity.z += (obstacle.velZ || 0) * 0.55;
         }
-    } else if (obstacle.type === "windmill") {
-        resolveWindmillCollision(obstacle);
+    } else if (obstacle.type === "rotatingObstacle") {
+        resolveRotatingObstacleCollision(obstacle);
     }
 }
 
+// Atualizar posição de todos os obstáculos móveis e calcular a sua velocidade instantânea
 function updateMovingObstacles(time, dt) {
     for (const obstacle of movingObstacles) {
         const prevX = obstacle.mesh.position.x; const prevZ = obstacle.mesh.position.z;
@@ -196,17 +210,20 @@ function updateMovingObstacles(time, dt) {
             const phase = obstacle.phase || 0;
             if (obstacle.axis === "x") obstacle.mesh.position.x = obstacle.baseX + Math.sin(time * obstacle.speed + phase) * obstacle.amplitude;
             else obstacle.mesh.position.z = obstacle.baseZ + Math.sin(time * obstacle.speed + phase) * obstacle.amplitude;
-        } else if (obstacle.type === "windmill") {
+        } else if (obstacle.type === "rotatingObstacle") {
             obstacle.mesh.rotation.y = time * obstacle.speed;
         }
+        // Guardar velocidade para transferi-la à bola em caso de colisão
         if (dt > 0) { obstacle.velX = (obstacle.mesh.position.x - prevX) / dt; obstacle.velZ = (obstacle.mesh.position.z - prevZ) / dt; }
     }
 }
 
+// Determinar o tipo de superfície sob a bola para calcular o atrito correto
+// Gelo: multiplier < 1 (menos atrito); Areia: multiplier > 1 (mais atrito)
 function getFrictionInfo() {
     let max = 1; let min = 1;
     let maxType = "grass"; let minType = "grass";
-    
+
     for (const zone of floorZones) {
         if (ball.position.x >= zone.minX && ball.position.x <= zone.maxX && ball.position.z >= zone.minZ && ball.position.z <= zone.maxZ) {
             if (ball.position.y >= (zone.height || 0) - 0.05 && ball.position.y <= (zone.height || 0) + 0.5) {
@@ -218,25 +235,14 @@ function getFrictionInfo() {
             }
         }
     }
-    
-    for (const zone of frictionZones) {
-        if (ball.position.x >= zone.minX && ball.position.x <= zone.maxX && ball.position.z >= zone.minZ && ball.position.z <= zone.maxZ) {
-            if (zone.multiplier > max) { max = zone.multiplier; maxType = zone.type; }
-            if (zone.multiplier < min) { min = zone.multiplier; minType = zone.type; }
-        }
-    }
+    // Se houver gelo, preferir o multiplicador mais baixo (deslize); senão o mais alto (areia)
     const useMin = min < 1;
     return { multiplier: useMin ? min : max, type: useMin ? minType : maxType };
 }
 
-function getBoostZoneAtPosition(position) {
-    for (const zone of boostZones) {
-        if (position.x >= zone.minX && position.x <= zone.maxX && position.z >= zone.minZ && position.z <= zone.maxZ) return zone;
-    }
-    return null;
-}
-
+// Loop principal de física da bola — chamado a cada frame com dt em segundos
 function updateBall(dt) {
+    // Após vencer, animar a bola a cair suavemente para dentro do buraco
     if (game.won) {
         const targetY = hole.pos.y - hole.depth + ball.radius;
         if (ball.position.y > targetY) {
@@ -254,6 +260,7 @@ function updateBall(dt) {
     const prevZ = ball.position.z;
     const prevY = ball.position.y;
 
+    // Rampa do Mapa 1 e Mapa 2: aplicar força gravitacional lateral na zona inclinada
     let isOnSlope = false;
     if (game.currentMap === 0) {
         if (ball.position.x > 11.9 && ball.position.x < 16.3) {
@@ -267,20 +274,11 @@ function updateBall(dt) {
         }
     }
 
+    // Integração de Euler simples: posição += velocidade * dt
     ball.position.addScaledVector(ball.velocity, dt);
 
-    const boostZone = getBoostZoneAtPosition(ball.position);
-    if (boostZone) {
-        if (ball.lastBoostZone !== boostZone.id) {
-            ball.velocity.addScaledVector(boostZone.dir, boostZone.strength);
-            ball.lastBoostZone = boostZone.id;
-            spawnBoostParticles(ball.position);
-            playSfx("boost", boostZone.strength / 6);
-        }
-    } else {
-        ball.lastBoostZone = -1;
-    }
 
+    // Colisão manual com as paredes do corredor em S do Mapa 2
     if (game.currentMap === 1) {
         const backZ = 0.4;
         const frontZ = 2.6;
@@ -306,6 +304,7 @@ function updateBall(dt) {
         }
     }
 
+    // Aplicar atrito como decaimento exponencial (mais estável que subtrair uma constante)
     const baseDrag = 1.4;
     const surface = getFrictionInfo();
     ball.surfaceType = surface.type;
@@ -316,6 +315,7 @@ function updateBall(dt) {
         spawnSandSplash(ball.velocity.length() * 0.25);
     }
 
+    // Resolver colisões com obstáculos e paredes estáticas
     for (const obstacle of movingObstacles) resolveObstacleCollision(obstacle);
     for (const box of colliders) resolveAABBCollision(box);
     clampBallInsideBounds();
@@ -323,6 +323,7 @@ function updateBall(dt) {
     const speedSq = ball.velocity.lengthSq();
     const movedSq = (ball.position.x - prevX) ** 2 + (ball.position.z - prevZ) ** 2;
 
+    // Detetar entrada no buraco: raio + velocidade máxima para evitar bolas que passem a correr
     const toHole = tmpVecB.copy(hole.pos).sub(ball.position);
     if (!game.won && Math.hypot(toHole.x, toHole.z) < hole.radius * 0.82 && Math.hypot(ball.velocity.x, ball.velocity.z) < 2.2) {
         game.won = true; ball.moving = false; ball.velocity.set(0, 0, 0);
@@ -338,6 +339,7 @@ function updateBall(dt) {
         renderMenuScores();
     }
 
+    // Determinar se a bola está sobre um piso válido e a que altura
     let targetGroundY = null;
     let onFloor = false;
     let floorHeight = null;
@@ -347,36 +349,15 @@ function updateBall(dt) {
             ball.position.z >= f.minZ - 0.05 && ball.position.z <= f.maxZ + 0.05) {
             if (prevY < (f.height ?? 0) - 0.05) continue;
             onFloor = true;
-            // don't break here -- there may be multiple overlapping floor zones
-            // we need to pick the highest floor under the ball
+            // Não parar aqui — pode haver vários pisos sobrepostos; pegar o mais alto
             floorHeight = Math.max(floorHeight ?? -Infinity, f.height ?? 0);
         }
     }
 
     if (onFloor) targetGroundY = floorHeight ?? 0;
 
-    if (!onFloor) {
-        for (const zone of frictionZones) {
-            if (ball.position.x >= zone.minX - 0.05 && ball.position.x <= zone.maxX + 0.05 &&
-                ball.position.z >= zone.minZ - 0.05 && ball.position.z <= zone.maxZ + 0.05) {
-                onFloor = true;
-                if (targetGroundY === null) targetGroundY = 0;
-                break;
-            }
-        }
-    }
 
-    if (!onFloor) {
-        for (const zone of boostZones) {
-            if (ball.position.x >= zone.minX - 0.05 && ball.position.x <= zone.maxX + 0.05 &&
-                ball.position.z >= zone.minZ - 0.05 && ball.position.z <= zone.maxZ + 0.05) {
-                onFloor = true;
-                if (targetGroundY === null) targetGroundY = 0;
-                break;
-            }
-        }
-    }
-
+    // Piso das rampas e da ilha circular — lógica específica por mapa
     if (game.currentMap === 0) {
         if (ball.position.x > 11.9 && ball.position.x < 16.3) {
             onFloor = true;
@@ -401,6 +382,7 @@ function updateBall(dt) {
         }
     }
 
+    // Detetar quando a bola ficou parada para terminar o movimento
     if (onFloor && !isOnSlope) {
         if (speedSq < 0.08 && movedSq < 0.0005) ball.restTimer += dt;
         else ball.restTimer = 0;
@@ -412,10 +394,12 @@ function updateBall(dt) {
         ball.restTimer = 0;
     }
 
+    // Física vertical: gravidade quando no ar, snap ao chão quando em cima de um piso
     if (!onFloor && !game.won) {
         ball.velocity.y -= 16 * dt;
         ball.position.y += ball.velocity.y * dt;
         if (ball.position.y < VOID_RESET_Y) {
+            // Caiu fora do mapa — penalizar e repor no spawn
             resetBall();
             game.strokes += 1;
             return;
@@ -433,13 +417,14 @@ function updateBall(dt) {
         if (ball.position.y <= groundCenterY) {
             ball.position.y = groundCenterY;
             if (ball.velocity.y < -1.5) {
-                ball.velocity.y *= -0.3;
+                ball.velocity.y *= -0.3; // pequeno ressalto ao aterrar
             } else {
                 ball.velocity.y = 0;
             }
         }
     }
 
+    // Atualizar o mesh e rodar a bola conforme a velocidade (rolar sem deslizar)
     if (ball.mesh) {
         ball.mesh.position.copy(ball.position);
         const speed = ball.velocity.length();

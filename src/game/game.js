@@ -1,4 +1,5 @@
-import * as THREE from "three";
+// Carregamento de mapas: limpa a cena, constrói o mapa e repõe a bola
+
 import { game, mapNames, course, hole, tmpVec } from "../core/state.js";
 import { message } from "../core/dom.js";
 import { clearCourse } from "../level/builders.js";
@@ -7,8 +8,10 @@ import { resetBall } from "./ball.js";
 import { renderMenuMaps } from "../ui/menu.js";
 
 function loadMap(index) {
-    const safeIndex = THREE.MathUtils.clamp(index, 0, mapNames.length - 1);
+    const safeIndex = Math.max(0, Math.min(index, mapNames.length - 1));
     game.currentMap = safeIndex; game.strokes = 0; game.won = false;
+
+    // Remover todos os objetos do mapa anterior da cena e limpar as listas de colisores
     clearCourse();
     if (message) message.classList.remove("visible");
 
@@ -20,10 +23,12 @@ function loadMap(index) {
 
     resetBall();
 
+    // Apontar a mira e câmara automaticamente na direção do buraco ao iniciar
     const toHole = tmpVec.copy(hole.pos).sub(course.spawn);
     game.aimAngle = Math.atan2(toHole.z, toHole.x);
     game.cameraYaw = game.aimAngle + Math.PI;
     game.cameraPitch = 0.6;
+
     renderMenuMaps();
 }
 

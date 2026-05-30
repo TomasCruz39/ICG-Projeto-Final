@@ -1,3 +1,6 @@
+// Funções construtoras de elementos de nível: pisos, paredes, obstáculos e zonas especiais
+// Usa caches de geometria, material e textura para não recriar assets repetidos
+
 import * as THREE from "three";
 import { scene } from "../core/scene.js";
 import {
@@ -6,34 +9,32 @@ import {
     course,
     colliders,
     movingObstacles,
-    frictionZones,
-    boostZones,
     floorZones,
     courseObjects,
 } from "../core/state.js";
 
-let boostZoneId = 0;
 
+// Adicionar um objeto à cena e registá-lo na lista do mapa atual
 function addObject(object) {
     scene.add(object);
     courseObjects.push(object);
 }
 
+// Limpar tudo ao mudar de mapa: remover da cena e esvaziar todas as listas
 function clearCourse() {
     for (const object of courseObjects) scene.remove(object);
     courseObjects.length = 0;
     colliders.length = 0;
     movingObstacles.length = 0;
-    frictionZones.length = 0;
-    boostZones.length = 0;
-    boostZoneId = 0;
     floorZones.length = 0;
 }
 
+// Caches partilhadas entre todos os mapas — reduzem drasticamente a memória de VRAM
 const textureCache = {};
 const materialCache = {};
 const geomCache = {};
 
+// BoxGeometry cacheada por dimensões — evita criar geometrias duplicadas
 function getCachedBoxGeom(sx, sy, sz) {
     const key = `${sx}_${sy}_${sz}`;
     if (geomCache[key]) return geomCache[key];
@@ -42,6 +43,7 @@ function getCachedBoxGeom(sx, sy, sz) {
     return geom;
 }
 
+// MeshStandardMaterial cacheado por parâmetros — a chave inclui todos os campos relevantes
 function getCachedMaterial(map, roughness, metalness, color, emissive, emissiveIntensity, side) {
     const key = `${map ? map.uuid : 'none'}_${roughness}_${metalness}_${color || 'none'}_${emissive ? emissive.getHex() : 'none'}_${emissiveIntensity || 0}_${side || THREE.FrontSide}`;
     if (materialCache[key]) return materialCache[key];
@@ -57,6 +59,7 @@ function getCachedMaterial(map, roughness, metalness, color, emissive, emissiveI
     return mat;
 }
 
+// Gerar textura de xadrez via Canvas 2D — sem ficheiros de imagem externos
 function makeCheckerTexture(colorA, colorB, size = 256, squares = 8, repeatX = 6, repeatY = 4) {
     const key = `${colorA}_${colorB}_${size}_${squares}_${repeatX}_${repeatY}`;
     if (textureCache[key]) return textureCache[key];
@@ -79,6 +82,7 @@ function makeCheckerTexture(colorA, colorB, size = 256, squares = 8, repeatX = 6
     return texture;
 }
 
+// Iluminação global: HemisphereLight para ambient + DirectionalLight para sombras + PointLight de fill
 function createLights() {
     const hemi = new THREE.HemisphereLight(0xa6ccff, 0x1a2b1e, 0.58);
     scene.add(hemi);
@@ -94,20 +98,23 @@ function createLights() {
 
     const fill = new THREE.PointLight(0x75bef9, 0.7, 50, 2);
     fill.position.set(0, 6, -4);
-    // PointLight castShadow was removed to save massive performance (avoids 6 renders per frame)
+    // castShadow removido da PointLight — evitaria 6 renders de sombra por frame
     scene.add(fill);
 }
 
+// Adicionar um colisor AABB invisível (apenas dados, sem mesh)
 function addBoxCollider(x, z, sx, sz, minY, maxY) {
     colliders.push({ minX: x - sx / 2, maxX: x + sx / 2, minZ: z - sz / 2, maxZ: z + sz / 2, minY, maxY });
 }
 
+// Criar um piso plano com textura gerada proceduralmente e registar a zona de piso
 function addFloor(x, z, sx, sz, type = "grass", topY = 0) {
     let colorA = "#2f7f3f", colorB = "#2a6f37";
     if (type === "dark") { colorA = "#266932"; colorB = "#215c2b"; }
     else if (type === "ice") { colorA = "#7dd3fc"; colorB = "#60a5fa"; }
     else if (type === "sand") { colorA = "#d4c394"; colorB = "#c2b280"; }
 
+    // Mais repetições de textura na areia para o padrão parecer mais fino
     let repeatX = Math.max(1, Math.ceil(sx / 2));
     let repeatY = Math.max(1, Math.ceil(sz / 2));
     if (type === "sand") {
@@ -127,6 +134,8 @@ function addFloor(x, z, sx, sz, type = "grass", topY = 0) {
     floorZones.push({ minX: x - sx / 2, maxX: x + sx / 2, minZ: z - sz / 2, maxZ: z + sz / 2, height: topY, type });
 }
 
+// Criar um piso com buraco circular usando ExtrudeGeometry + Shape com hole
+// fallThrough=true → bola cai pelo centro; false → vitória ao chegar ao buraco
 function addFloorWithHole(x, z, sx, sz, holeX, holeZ, holeRadius, type = "grass", topY = 0, fallThrough = false) {
     let colorA = "#2f7f3f", colorB = "#2a6f37";
     if (type === "dark") { colorA = "#266932"; colorB = "#215c2b"; }
@@ -135,6 +144,7 @@ function addFloorWithHole(x, z, sx, sz, holeX, holeZ, holeRadius, type = "grass"
 
     const tex = makeCheckerTexture(colorA, colorB, 512, 16, 0.5, 0.5);
 
+    // Contorno exterior do piso
     const shape = new THREE.Shape();
     shape.moveTo(-sx / 2, sz / 2);
     shape.lineTo(sx / 2, sz / 2);
@@ -142,6 +152,7 @@ function addFloorWithHole(x, z, sx, sz, holeX, holeZ, holeRadius, type = "grass"
     shape.lineTo(-sx / 2, -sz / 2);
     shape.lineTo(-sx / 2, sz / 2);
 
+    // Buraco circular subtrai ao shape
     const holePath = new THREE.Path();
     const hx = holeX - x;
     const hz = holeZ - z;
@@ -149,7 +160,7 @@ function addFloorWithHole(x, z, sx, sz, holeX, holeZ, holeRadius, type = "grass"
     shape.holes.push(holePath);
 
     const geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.1, bevelEnabled: false, curveSegments: 32 });
-    geometry.rotateX(Math.PI / 2);
+    geometry.rotateX(Math.PI / 2); // ExtrudeGeometry gera em XY, precisamos de rodar para XZ
 
     const mesh = new THREE.Mesh(
         geometry,
@@ -160,7 +171,7 @@ function addFloorWithHole(x, z, sx, sz, holeX, holeZ, holeRadius, type = "grass"
     addObject(mesh);
 
     if (fallThrough) {
-        // Buracos de queda: 4 faixas à volta do buraco — bola cai pelo centro
+        // Registar 4 faixas de piso à volta do buraco — o centro fica vazio para a bola cair
         const fx0 = x - sx / 2, fx1 = x + sx / 2;
         const fz0 = z - sz / 2, fz1 = z + sz / 2;
         const hR = holeRadius;
@@ -169,11 +180,12 @@ function addFloorWithHole(x, z, sx, sz, holeX, holeZ, holeRadius, type = "grass"
         if (fx0 < holeX - hR) floorZones.push({ minX: fx0, maxX: holeX - hR, minZ: Math.max(fz0, holeZ - hR), maxZ: Math.min(fz1, holeZ + hR), height: topY, type });
         if (holeX + hR < fx1) floorZones.push({ minX: holeX + hR, maxX: fx1, minZ: Math.max(fz0, holeZ - hR), maxZ: Math.min(fz1, holeZ + hR), height: topY, type });
     } else {
-        // Buracos de vitória: retângulo completo — bola fica na superfície, vitória é detetada normalmente
+        // Buraco de vitória: registar todo o retângulo — a deteção de vitória é feita pelo raio do buraco
         floorZones.push({ minX: x - sx / 2, maxX: x + sx / 2, minZ: z - sz / 2, maxZ: z + sz / 2, height: topY, type });
     }
 }
 
+// Parede com textura de pedra e colisor AABB correspondente
 function addWall(x, z, sx, sz, height = 0.28, yOffset = 0, rotX = 0, rotZ = 0) {
     const repeatX = Math.max(1, Math.ceil(sx / 3));
     const repeatY = Math.max(1, Math.ceil(sz / 3));
@@ -188,22 +200,18 @@ function addWall(x, z, sx, sz, height = 0.28, yOffset = 0, rotX = 0, rotZ = 0) {
     mesh.castShadow = true; mesh.receiveShadow = true;
     addObject(mesh);
 
+    // Margem extra na altura do colisor para paredes inclinadas (rotX ou rotZ)
     const extraHeight = (rotX !== 0 || rotZ !== 0) ? 1.0 : 0;
     addBoxCollider(x, z, sx, sz, yOffset, yOffset + height + extraHeight);
 }
 
-function addStartPad(x, z) {
-    const pad = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.72, 0.72, 0.12, 30),
-        getCachedMaterial(null, 0.45, 0.2, 0x334155)
-    );
-    pad.position.set(x, 0.06, z); pad.receiveShadow = true;
-    addObject(pad);
-}
 
+
+// Definir o buraco: atualizar o estado global, criar o anel metálico e a cavidade escura
 function setHole(x, z, radius = 0.42, y = 0) {
     hole.pos.set(x, y, z); hole.radius = radius;
 
+    // Anel visual em torno do buraco
     const ring = new THREE.Mesh(
         new THREE.TorusGeometry(radius, 0.025, 16, 32),
         new THREE.MeshStandardMaterial({ color: 0x8f98a3, roughness: 0.45, metalness: 0.2 })
@@ -212,6 +220,7 @@ function setHole(x, z, radius = 0.42, y = 0) {
     ring.receiveShadow = true;
     addObject(ring);
 
+    // Cilindro interior com BackSide para simular a profundidade do buraco
     const cup = new THREE.Mesh(
         new THREE.CylinderGeometry(radius, radius, hole.depth, 32, 1, false),
         new THREE.MeshStandardMaterial({ color: 0x101317, roughness: 0.9, side: THREE.BackSide })
@@ -220,44 +229,8 @@ function setHole(x, z, radius = 0.42, y = 0) {
     addObject(cup);
 }
 
-function addFrictionZone(minX, maxX, minZ, maxZ, multiplier, type = "sand", topY = 0) {
-    frictionZones.push({ minX, maxX, minZ, maxZ, multiplier, type });
-    const sx = maxX - minX; const sz = maxZ - minZ;
 
-    let colorA = "#d4c394", colorB = "#c2b280";
-    if (type === "ice") { colorA = "#a5f3fc"; colorB = "#7dd3fc"; }
-    const repeatX = Math.max(1, Math.ceil(sx * 1.5));
-    const repeatY = Math.max(1, Math.ceil(sz * 1.5));
-    const tex = makeCheckerTexture(colorA, colorB, 256, 16, repeatX, repeatY);
-
-    const plate = new THREE.Mesh(
-        getCachedBoxGeom(sx, 0.06, sz),
-        getCachedMaterial(tex, 0.95, 0.0)
-    );
-    plate.position.set((minX + maxX) / 2, topY + 0.03, (minZ + maxZ) / 2);
-    plate.receiveShadow = true; addObject(plate);
-}
-
-function addBoostZone(minX, maxX, minZ, maxZ, dirX, dirZ, strength = 4.6) {
-    const id = boostZoneId++;
-    const dir = new THREE.Vector3(dirX, 0, dirZ);
-    if (dir.lengthSq() < 0.001) dir.set(1, 0, 0);
-    dir.normalize();
-    boostZones.push({ id, minX, maxX, minZ, maxZ, dir, strength });
-
-    const sx = maxX - minX; const sz = maxZ - minZ;
-    const repeatX = Math.max(1, Math.ceil(sx * 1.6));
-    const repeatY = Math.max(1, Math.ceil(sz * 1.6));
-    const tex = makeCheckerTexture("#14b8a6", "#0ea5e9", 256, 8, repeatX, repeatY);
-    const plate = new THREE.Mesh(
-        getCachedBoxGeom(sx, 0.05, sz),
-        getCachedMaterial(tex, 0.35, 0.2, undefined, new THREE.Color(0x0f3a42), 0.6)
-    );
-    plate.position.set((minX + maxX) / 2, 0.03, (minZ + maxZ) / 2);
-    plate.receiveShadow = true;
-    addObject(plate);
-}
-
+// Barra deslizante animada — o movimento sinusoidal é calculado em updateMovingObstacles()
 function addMovingBar(options) {
     const tex = makeCheckerTexture("#f59e0b", "#d97706", 128, 4, 4, 1);
     const baseY = options.y || 0;
@@ -277,7 +250,9 @@ function addMovingBar(options) {
     });
 }
 
-function addWindmill(x, z, armLength = 2.1, armThickness = 0.24, speed = 2.5, y = 0) {
+// Obstáculo giratório com hub central e duas pás cruzadas em X
+// A colisão é tratada em resolveRotatingObstacleCollision() com transformação para espaço local
+function addRotatingObstacle(x, z, armLength = 2.1, armThickness = 0.24, speed = 2.5, y = 0) {
     const group = new THREE.Group(); group.position.set(x, y + 0.5, z);
     const hub = new THREE.Mesh(
         new THREE.CylinderGeometry(0.26, 0.26, 0.95, 22),
@@ -285,6 +260,7 @@ function addWindmill(x, z, armLength = 2.1, armThickness = 0.24, speed = 2.5, y 
     );
     hub.rotation.x = Math.PI / 2; group.add(hub);
 
+    // Duas pás perpendiculares — juntas formam a cruz do obstáculo giratório
     const bladeTex = makeCheckerTexture("#ef4444", "#dc2626", 128, 4, 8, 1);
     const bladeMat = new THREE.MeshStandardMaterial({ map: bladeTex, roughness: 0.5 });
     const bladeA = new THREE.Mesh(new THREE.BoxGeometry(armLength * 2, 0.3, armThickness * 2), bladeMat);
@@ -293,9 +269,10 @@ function addWindmill(x, z, armLength = 2.1, armThickness = 0.24, speed = 2.5, y 
 
     group.traverse((obj) => { if (obj.isMesh) { obj.castShadow = true; obj.receiveShadow = true; } });
     addObject(group);
-    movingObstacles.push({ type: "windmill", mesh: group, speed, armLength, armThickness, maxY: y + 0.65 });
+    movingObstacles.push({ type: "rotatingObstacle", mesh: group, speed, armLength, armThickness, maxY: y + 0.65 });
 }
 
+// Atualizar os limites do mundo — cada mapa define os seus próprios limites
 function setBounds(minX, maxX, minZ, maxZ) {
     course.bounds.minX = minX; course.bounds.maxX = maxX;
     course.bounds.minZ = minZ; course.bounds.maxZ = maxZ;
@@ -306,15 +283,11 @@ export {
     clearCourse,
     makeCheckerTexture,
     createLights,
-    addBoxCollider,
     addFloor,
     addFloorWithHole,
     addWall,
-    addStartPad,
     setHole,
-    addFrictionZone,
-    addBoostZone,
     addMovingBar,
-    addWindmill,
+    addRotatingObstacle,
     setBounds,
 };

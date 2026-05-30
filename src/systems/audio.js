@@ -1,15 +1,21 @@
-import * as THREE from "three";
+// Sistema de áudio: música de fundo e efeitos sonoros via Web Audio API
 
 const AUDIO_KEY = "icg-mini-golf-audio-enabled";
 
+// Música de fundo em loop — volume baixo para não abafar os SFX
+const bgMusic = new Audio("./assets/bg_music.mp3");
+bgMusic.loop = true;
+bgMusic.volume = 0.03;
+
 const audioState = {
     enabled: true,
-    ready: false,
+    ready: false,   // true depois de initAudio() ser chamado (requer interação do utilizador)
     ctx: null,
     master: null,
     ambience: null,
 };
 
+// Lê a preferência de áudio guardada no localStorage
 function loadAudioEnabled() {
     try {
         const raw = localStorage.getItem(AUDIO_KEY);
@@ -20,6 +26,7 @@ function loadAudioEnabled() {
     }
 }
 
+// Liga ou desliga todo o áudio e guarda a preferência
 function setAudioEnabled(enabled) {
     audioState.enabled = enabled;
     try {
@@ -32,6 +39,8 @@ function setAudioEnabled(enabled) {
     else stopAmbience();
 }
 
+// O browser não permite criar AudioContext antes de uma interação do utilizador
+// Esta função é chamada no primeiro clique/tecla
 function unlockAudio() {
     initAudio();
     if (audioState.ctx && audioState.ctx.state === "suspended") audioState.ctx.resume();
@@ -42,6 +51,7 @@ function initAudio() {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
     const ctx = new AudioContext();
+    // Nó master de ganho — controla o volume global dos SFX
     const master = ctx.createGain();
     master.gain.value = 0.38;
     master.connect(ctx.destination);
@@ -53,39 +63,16 @@ function initAudio() {
 
 function startAmbience() {
     if (!audioState.ready || audioState.ambience) return;
-    const ctx = audioState.ctx;
-    const gain = ctx.createGain();
-    gain.gain.value = 0.018;
-    gain.connect(audioState.master);
-
-    const oscA = ctx.createOscillator();
-    const oscB = ctx.createOscillator();
-    oscA.type = "sine"; oscB.type = "sine";
-    oscA.frequency.value = 98;
-    oscB.frequency.value = 196;
-
-    const lfo = ctx.createOscillator();
-    const lfoGain = ctx.createGain();
-    lfo.frequency.value = 0.08;
-    lfoGain.gain.value = 8;
-    lfo.connect(lfoGain).connect(oscB.frequency);
-
-    oscA.connect(gain);
-    oscB.connect(gain);
-    oscA.start(); oscB.start(); lfo.start();
-
-    audioState.ambience = { gain, oscA, oscB, lfo };
+    audioState.ambience = true;
+    bgMusic.play().catch(e => console.log("O browser bloqueou o autoplay:", e));
 }
 
 function stopAmbience() {
-    const amb = audioState.ambience;
-    if (!amb) return;
-    amb.oscA.stop(); amb.oscB.stop(); amb.lfo.stop();
-    amb.oscA.disconnect(); amb.oscB.disconnect(); amb.lfo.disconnect();
-    amb.gain.disconnect();
     audioState.ambience = null;
+    bgMusic.pause();
 }
 
+// Toca um tom sintético via Web Audio API com envelope de volume (attack + decay)
 function playTone({ freq, duration, type, volume, delay = 0, detune = 0 }) {
     if (!audioState.enabled) return;
     if (!audioState.ready) initAudio();
@@ -100,6 +87,7 @@ function playTone({ freq, duration, type, volume, delay = 0, detune = 0 }) {
     osc.frequency.value = freq;
     osc.detune.value = detune;
 
+    // Envelope simples: attack rápido e decay para evitar clipping
     gain.gain.setValueAtTime(0.0001, startTime);
     gain.gain.exponentialRampToValueAtTime(volume, startTime + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
@@ -113,23 +101,22 @@ function playTone({ freq, duration, type, volume, delay = 0, detune = 0 }) {
     };
 }
 
+// Toca os SFX compostos por tipo de evento de jogo
 function playSfx(type, intensity = 1) {
-    const strength = THREE.MathUtils.clamp(intensity, 0.2, 1);
+    const strength = Math.max(0.2, Math.min(intensity, 1));
     if (type === "shot") {
-        // High-frequency "tack" (audible on laptop speakers)
+        // Tacada: camadas de alta, média e baixa frequência para soar bem em laptop
         playTone({ freq: 700 + strength * 300, duration: 0.05, type: "square", volume: 0.06 * strength });
-        // Mid-frequency "thwack"
         playTone({ freq: 300 + strength * 150, duration: 0.12, type: "triangle", volume: 0.12 * strength });
-        // Low-frequency body
         playTone({ freq: 150, duration: 0.18, type: "sine", volume: 0.08 * strength });
     } else if (type === "bounce") {
+        // Ressalto na parede
         playTone({ freq: 240 + strength * 140, duration: 0.09, type: "square", volume: 0.08 * strength });
     } else if (type === "hole") {
+        // Sequência ascendente ao entrar no buraco
         playTone({ freq: 330, duration: 0.18, type: "sine", volume: 0.12 });
         playTone({ freq: 440, duration: 0.2, type: "sine", volume: 0.1, delay: 0.12 });
         playTone({ freq: 550, duration: 0.22, type: "sine", volume: 0.08, delay: 0.24 });
-    } else if (type === "boost") {
-        playTone({ freq: 420 + strength * 120, duration: 0.12, type: "sawtooth", volume: 0.08 * strength });
     }
 }
 

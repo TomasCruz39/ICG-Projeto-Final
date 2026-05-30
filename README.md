@@ -47,11 +47,73 @@ Ideal para inspecionar o Level Design e o encaixe geométrico das paredes.
 
 ---
 
-## 🛠️ Tecnologias e Ferramentas Utilizadas
+## Tecnologias e Ferramentas Utilizadas
 
 * **HTML5 & CSS3:** Estrutura e Interface HUD/Menus.
 * **JavaScript (ES6+):** Lógica do jogo e matemática vetorial.
 * **[Three.js](https://threejs.org/):** Renderização WebGL, luzes, materiais e geometria.
 * **Google Fonts (Space Grotesk):** Tipografia da interface.
 * **Web Audio API:** Síntese de áudio procedural (SFX e ambiente).
-* **Inteligência Artificial:** O desenvolvimento deste projeto contou com o apoio de ferramentas de IA, nomeadamente o **Google Gemini** e o **GitHub Copilot**, utilizados para auxiliar na estruturação da matemática da física, *troubleshooting* de bugs e otimização do código.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
+* **Inteligência Artificial:** O desenvolvimento deste projeto contou com o apoio de ferramentas de IA, nomeadamente o **Google Gemini** e o **GitHub Copilot**, utilizados para auxiliar na estruturação da matemática da física, *troubleshooting* de bugs e otimização do código.                                                                                                
+---
+
+## Estrutura do Projeto
+
+```
+ICG-Projeto-Final/
+├── index.html          # Entrada da aplicação (HUD, menus, estilos inline)
+├── projeto.js          # Ponto de entrada do módulo JS
+├── src/
+│   ├── main.js         # Loop de jogo (requestAnimationFrame)
+│   ├── core/
+│   │   ├── scene.js    # Configuração do renderer, câmara e luzes Three.js
+│   │   ├── state.js    # Estado global partilhado (bola, buraco, percurso, colisores)
+│   │   └── dom.js      # Referências aos elementos do DOM (HUD, menu, message)
+│   ├── game/
+│   │   ├── ball.js     # Motor de física customizado (colisões AABB, atrito, gravidade)
+│   │   ├── camera.js   # Câmara orbital e modo Free Cam
+│   │   ├── aim.js      # Lógica de mira e indicador de força
+│   │   └── game.js     # Orquestração do loop (update por frame)
+│   ├── input/
+│   │   └── controls.js # Handlers de teclado, rato e touch (mobile)
+│   ├── level/
+│   │   ├── maps.js     # Definição dos 5 mapas (geometria, obstáculos, buraco)
+│   │   └── builders.js # Funções de construção (addFloor, addWall, addMovingBar, etc.)
+│   ├── systems/
+│   │   ├── audio.js    # Síntese de áudio procedural (Web Audio API)
+│   │   ├── particles.js# Sistema de partículas (relva, areia, celebração)
+│   │   └── scores.js   # Gestão de recordes locais (localStorage)
+│   └── ui/
+│       ├── menu.js     # Renderização e lógica do menu principal
+│       └── hud.js      # Atualização do HUD (tacadas, força, mapa)
+└── assets/             # Recursos estáticos (música de fundo)
+```
+
+---
+
+## Como Jogar
+
+**[https://tomascruz39.github.io/ICG-Projeto-Final/](https://tomascruz39.github.io/ICG-Projeto-Final/)**
+
+---
+
+## Suporte Mobile
+
+O jogo inclui uma interface tátil adaptada para dispositivos móveis (detetada automaticamente):
+
+* **Botões de toque:** Menu, Reiniciar, Mira e Tacada
+* **Slider de força:** Controlo da potência da tacada via input range
+* **Arrastar:** Rotação da câmara e da mira via gestos de toque único
+
+---
+
+## Créditos
+
+* **Música de Fundo:** [aquatic ambience · scizzie](https://www.youtube.com/watch?v=DP3rDP02lE0)
+
+---
+
+## Autores
+
+* **Tomás Cruz** — Desenvolvimento completo do projeto
+* **Unidade Curricular:** Introdução à Computação Gráfica — 2025/2026

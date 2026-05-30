@@ -1,7 +1,11 @@
+// Sistema de partículas CPU-side usando THREE.Points com BufferGeometry
+// Três sistemas independentes: relva, areia e confetti de celebração
+
 import * as THREE from "three";
 import { scene, timeState } from "../core/scene.js";
 import { ball, hole } from "../core/state.js";
 
+// Classe genérica de sistema de partículas — reutilizável para qualquer efeito
 class ParticleSystem {
     constructor(options) {
         this.max = options.max;
@@ -10,13 +14,16 @@ class ParticleSystem {
         this.size = options.size ?? 0.08;
         this.opacity = options.opacity ?? 0.9;
         this.colors = options.colors || [options.color || 0xffffff];
+
+        // Arrays tipados para não alocar objetos por partícula no update
         this.positions = new Float32Array(this.max * 3);
         this.velocities = new Float32Array(this.max * 3);
         this.lifetimes = new Float32Array(this.max);
         this.ages = new Float32Array(this.max);
         this.colorAttrib = new Float32Array(this.max * 3);
-        this.cursor = 0;
+        this.cursor = 0; // índice circular — sobrescreve as mais antigas
 
+        // Esconder todas as partículas inicialmente (Y = -9999)
         for (let i = 0; i < this.max; i++) {
             this.positions[i * 3 + 1] = -9999;
         }
@@ -29,13 +36,14 @@ class ParticleSystem {
             transparent: true,
             opacity: this.opacity,
             vertexColors: true,
-            depthWrite: false,
+            depthWrite: false, // evita artifacts de ordenação com outros objetos transparentes
         });
         this.points = new THREE.Points(this.geometry, this.material);
-        this.points.frustumCulled = false;
+        this.points.frustumCulled = false; // sempre visível — simplifica a gestão
         scene.add(this.points);
     }
 
+    // Emite `count` partículas na posição dada com parâmetros opcionais
     spawn(position, count, options = {}) {
         const spread = options.spread ?? 0.4;
         const lifetime = options.lifetime ?? 0.6;
@@ -50,6 +58,8 @@ class ParticleSystem {
             const idx = this.cursor++ % this.max;
             const base = idx * 3;
             const color = new THREE.Color(colors[Math.floor(Math.random() * colors.length)]);
+
+            // Direção inicial aleatória numa semiesfera para cima
             const theta = Math.random() * Math.PI * 2;
             const up = Math.random() * 0.6 + 0.4;
             const radial = Math.sqrt(1 - up * up);
@@ -59,6 +69,7 @@ class ParticleSystem {
             let vy = up * spreadSpeed;
             let vz = Math.sin(theta) * radial * spreadSpeed;
 
+            // Adicionar um impulso direcional (e.g. normal de colisão)
             if (direction) {
                 vx += direction.x * directionStrength;
                 vy += direction.y * directionStrength;
@@ -82,18 +93,21 @@ class ParticleSystem {
         if (colorUpdate) this.geometry.attributes.color.needsUpdate = true;
     }
 
+    // Atualizar física das partículas ativas e marcar o buffer para upload à GPU
     update(dt) {
         let needsUpdate = false;
         for (let i = 0; i < this.max; i++) {
             if (this.lifetimes[i] <= 0) continue;
             this.ages[i] += dt;
             if (this.ages[i] >= this.lifetimes[i]) {
+                // Esconder a partícula morta enviando-a para baixo do mapa
                 this.lifetimes[i] = 0;
                 this.positions[i * 3 + 1] = -9999;
                 needsUpdate = true;
                 continue;
             }
             const base = i * 3;
+            // Gravidade + drag exponencial simples
             this.velocities[base + 1] -= this.gravity * dt;
             this.velocities[base] *= this.drag;
             this.velocities[base + 1] *= this.drag;
@@ -107,6 +121,7 @@ class ParticleSystem {
     }
 }
 
+// Instâncias globais — criadas uma vez e reutilizadas em todos os mapas
 const particles = {
     grass: new ParticleSystem({ max: 240, size: 0.08, color: 0x7bdc74, gravity: 7, drag: 0.92, opacity: 0.9 }),
     sand: new ParticleSystem({ max: 220, size: 0.06, color: 0xd4c394, gravity: 6, drag: 0.9, opacity: 0.85 }),
@@ -120,8 +135,8 @@ const particles = {
     }),
 };
 
-const boostDirection = new THREE.Vector3(0, 1, 0);
 
+// Estado da animação de celebração (confetti ao entrar no buraco)
 const celebration = {
     active: false,
     time: 0,
@@ -129,6 +144,7 @@ const celebration = {
     nextBurst: 0,
 };
 
+// Partículas de relva ao ressaltar nas paredes — throttled por lastImpactTime
 function spawnImpactParticles(normal, intensity) {
     if (ball.surfaceType !== "grass") return;
     if (timeState.now - ball.lastImpactTime < 0.12) return;
@@ -145,6 +161,7 @@ function spawnImpactParticles(normal, intensity) {
     });
 }
 
+// Spray de areia enquanto a bola rola na zona de areia
 function spawnSandSplash(intensity) {
     if (timeState.now - ball.lastSandTime < 0.18) return;
     ball.lastSandTime = timeState.now;
@@ -158,16 +175,6 @@ function spawnSandSplash(intensity) {
     });
 }
 
-function spawnBoostParticles(position) {
-    particles.grass.spawn(position, 10, {
-        spread: 0.3,
-        speed: 1.6,
-        lifetime: 0.45,
-        colors: [0x5eead4, 0x38bdf8],
-        direction: boostDirection,
-        directionStrength: 0.6,
-    });
-}
 
 function startCelebration() {
     celebration.active = true;
@@ -175,6 +182,7 @@ function startCelebration() {
     celebration.nextBurst = 0;
 }
 
+// Emite rajadas de confetti durante ~2.6 segundos após entrar no buraco
 function updateCelebration(dt) {
     if (!celebration.active) return;
     celebration.time += dt;
@@ -190,6 +198,7 @@ function updateCelebration(dt) {
             direction: boostDirection,
             directionStrength: 1.2,
         });
+        // Intervalo aleatório entre rajadas para parecer mais orgânico
         celebration.nextBurst = celebration.time + 0.18 + Math.random() * 0.12;
     }
 }
@@ -201,4 +210,4 @@ function updateParticles(dt) {
     updateCelebration(dt);
 }
 
-export { spawnImpactParticles, spawnSandSplash, spawnBoostParticles, startCelebration, updateParticles };
+export { spawnImpactParticles, spawnSandSplash, startCelebration, updateParticles };
