@@ -189,6 +189,15 @@ function initControls() {
             e.target.style.borderColor = input.mobileAimMode ? "var(--accent-2)" : "var(--panel-border)";
             e.target.style.color = input.mobileAimMode ? "var(--accent-2)" : "var(--ink)";
         });
+        // Botão 👁: mostrar/ocultar o HUD do canto superior esquerdo
+        document.getElementById("mobile-hud-toggle").addEventListener("pointerdown", (e) => {
+            e.preventDefault(); unlockAudio();
+            const hudEl = document.getElementById("hud");
+            if (!hudEl) return;
+            const hidden = hudEl.classList.toggle("hidden");
+            e.target.textContent = hidden ? "👁\u{FE0E}" : "👁";
+            e.target.style.opacity = hidden ? "0.45" : "1";
+        });
         // Botão grande: disparar tacada (equivalente a Espaço/Enter)
         document.getElementById("mobile-shoot").addEventListener("pointerdown", (e) => {
             e.preventDefault(); unlockAudio(); shoot();
