@@ -166,11 +166,15 @@ function spawnSandSplash(intensity) {
     if (timeState.now - ball.lastSandTime < 0.18) return;
     ball.lastSandTime = timeState.now;
     const strength = THREE.MathUtils.clamp(intensity, 0.4, 1.6);
+    // Direção oposta ao movimento da bola (areia voa para trás)
+    const dir = ball.velocity.length() > 0.01
+        ? new THREE.Vector3(-ball.velocity.x, 0, -ball.velocity.z).normalize()
+        : null;
     particles.sand.spawn(ball.position, Math.round(6 * strength), {
         spread: 0.4,
         speed: 1.4 * strength,
         lifetime: 0.6,
-        direction: boostDirection,
+        direction: dir,
         directionStrength: 0.5 * strength,
     });
 }
@@ -195,8 +199,6 @@ function updateCelebration(dt) {
             spread: 0.8,
             speed: 2.4,
             lifetime: 1.1,
-            direction: boostDirection,
-            directionStrength: 1.2,
         });
         // Intervalo aleatório entre rajadas para parecer mais orgânico
         celebration.nextBurst = celebration.time + 0.18 + Math.random() * 0.12;

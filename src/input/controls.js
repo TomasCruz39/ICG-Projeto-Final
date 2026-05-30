@@ -75,8 +75,27 @@ function initControls() {
         }
     });
 
+    // pointercancel: o browser cancelou o toque (notificação, scroll externo, etc.)
+    // Sem este handler, o pointerId fica no activeTouches e o próximo toque é
+    // contado como 2.º dedo, entrando em modo pinch e bloqueando a mira.
+    const cancelTouch = (e) => {
+        if (e.pointerType !== "touch") return;
+        input.activeTouches.delete(e.pointerId);
+        if (input.activeTouches.size < 2) input.initialPinchDist = null;
+        if (e.pointerId === input.activePointerId) {
+            input.activePointerId = null;
+            input.draggingCamera = false;
+            input.draggingAim = false;
+        }
+    };
+    window.addEventListener("pointercancel", cancelTouch);
+    // pointerleave no canvas também pode acontecer quando o dedo sai da janela
+    renderer.domElement.addEventListener("pointercancel", cancelTouch);
+
     window.addEventListener("pointermove", (e) => {
-        if (e.pointerType === "touch" && input.activeTouches.has(e.pointerId)) {
+        if (e.pointerType === "touch") {
+            // Ignorar completamente toques que não foram registados no canvas
+            if (!input.activeTouches.has(e.pointerId)) return;
             // Atualizar posição deste dedo no mapa de toques
             input.activeTouches.set(e.pointerId, { x: e.clientX, y: e.clientY });
             if (input.activeTouches.size === 2 && input.initialPinchDist !== null) {
@@ -89,9 +108,11 @@ function initControls() {
                 return; // não processar como arrastamento simples
             }
         }
-        
+
         // Ignorar movimentos de pointers que não sejam o ativo
         if (input.activePointerId !== null && e.pointerId !== input.activePointerId) return;
+        // Para toques: se não houver pointer ativo, ignorar (evita corromper prevX/Y com toques nos botões)
+        if (e.pointerType === "touch" && input.activePointerId === null) return;
         const dx = e.clientX - input.prevX; const dy = e.clientY - input.prevY;
         input.prevX = e.clientX; input.prevY = e.clientY;
         if (game.menuOpen) return;
@@ -130,9 +151,9 @@ function initControls() {
         // Atualizar o mapa de teclas pressionadas (usado pelo sistema de Free Cam com WASD)
         if (Object.prototype.hasOwnProperty.call(keys, key)) keys[key] = true;
 
-        // Setas: ajustar a força da próxima tacada
-        if (key === "arrowup") game.power = Math.min(game.maxPower, game.power + 0.6);
-        else if (key === "arrowdown") game.power = Math.max(game.minPower, game.power - 0.6);
+        // Setas ou W/S (fora do Free Cam): ajustar a força da próxima tacada
+        if (key === "arrowup" || (!game.freeCam && key === "w")) game.power = Math.min(game.maxPower, game.power + 0.6);
+        else if (key === "arrowdown" || (!game.freeCam && key === "s")) game.power = Math.max(game.minPower, game.power - 0.6);
         // Espaço ou Enter: efetuar a tacada
         else if (key === " " || key === "enter") shoot();
         else if (key === "r") {
