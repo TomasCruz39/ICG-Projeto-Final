@@ -97,7 +97,7 @@ function buildMapHard() {
 
     addFloor(-9, 0, 12, 4, "grass");
     addFloor(2, 0, 10, 10, "dark");
-    addFloor(10, 0, 6, 2, "sand"); // zona de areia antes da ilha para travar a bola
+    addFloor(10, 0, 6, 2, "sand"); // zona de areia antes da ilha
 
     // Ilha circular no destino — criada com ExtrudeGeometry + buraco central
     const texIsland = makeCheckerTexture("#2f7f3f", "#2a6f37", 512, 16, 0.5, 0.5);
@@ -109,7 +109,7 @@ function buildMapHard() {
     const islandGeom = new THREE.ExtrudeGeometry(shape, { depth: 0.35, bevelEnabled: false, curveSegments: 36 });
     islandGeom.rotateX(Math.PI / 2);
     const island = new THREE.Mesh(islandGeom, new THREE.MeshStandardMaterial({ map: texIsland, roughness: 0.82, metalness: 0.03 }));
-    island.position.set(15, 0, 0);
+    island.position.set(15, 0.01, 0); // ligeiramente acima do piso para evitar z-fighting com a areia
     island.receiveShadow = true;
     addObject(island);
 
