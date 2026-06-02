@@ -41,11 +41,13 @@ function renderMenuScores() {
     }).join("");
 }
 
+// Atualiza o texto dos botões do menu conforme o estado atual do jogo e do áudio
 function updateMenuButtons() {
     if (menuStart) menuStart.textContent = game.started ? "Retomar" : "Jogar";
     if (menuAudio) menuAudio.textContent = audioState.enabled ? "Audio: On" : "Audio: Off";
 }
 
+// Mostra ou esconde o menu e sincroniza o estado do HUD; ao abrir, atualiza todas as secções
 function setMenuVisible(visible) {
     game.menuOpen = visible;
     if (menu) menu.classList.toggle("visible", visible);
@@ -60,10 +62,12 @@ function setMenuVisible(visible) {
     }
 }
 
+// Abre o menu principal (pausa o jogo)
 function openMenu() {
     setMenuVisible(true);
 }
 
+// Fecha o menu e marca o jogo como iniciado (muda "Jogar" para "Retomar")
 function closeMenu() {
     game.started = true;
     setMenuVisible(false);

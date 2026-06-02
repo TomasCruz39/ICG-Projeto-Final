@@ -7,8 +7,10 @@ import { buildMapEasy, buildMapMedium, buildMapHard, buildMapIceBridge, buildMap
 import { resetBall } from "./ball.js";
 import { renderMenuMaps } from "../ui/menu.js";
 
+// Carrega o mapa pelo índice: limpa o percurso anterior, constrói o novo e repõe a bola no spawn
 function loadMap(index) {
     const safeIndex = Math.max(0, Math.min(index, mapNames.length - 1));
+    // Atualizar o estado global do jogo para o novo mapa
     game.currentMap = safeIndex; game.strokes = 0; game.won = false;
 
     // Remover todos os objetos do mapa anterior da cena e limpar as listas de colisores

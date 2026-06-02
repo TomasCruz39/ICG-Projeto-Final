@@ -54,7 +54,7 @@ Ideal para inspecionar o Level Design e o encaixe geométrico das paredes.
 * **[Three.js](https://threejs.org/):** Renderização WebGL, luzes, materiais e geometria.
 * **Google Fonts (Space Grotesk):** Tipografia da interface.
 * **Web Audio API:** Síntese de áudio procedural (SFX e ambiente).
-* **Inteligência Artificial:** O desenvolvimento deste projeto contou com o apoio de ferramentas de IA, nomeadamente o **Google Gemini** e o **GitHub Copilot**, utilizados para auxiliar na estruturação da matemática da física, *troubleshooting* de bugs e otimização do código.                                                                                                
+* **Inteligência Artificial:** O desenvolvimento deste projeto contou com o apoio de ferramentas de IA, nomeadamente o **Google Gemini** e o **GitHub Copilot**, utilizados para auxiliar na estruturação da matemática da física, *troubleshooting* de bugs e otimização do código. **Os comentários presentes no código fonte foram gerados com auxílio de IA.**                                                                                               
 ---
 
 ## Estrutura do Projeto
@@ -94,6 +94,12 @@ ICG-Projeto-Final/
 ## Como Jogar
 
 **[https://tomascruz39.github.io/ICG-Projeto-Final/](https://tomascruz39.github.io/ICG-Projeto-Final/)**
+
+---
+
+## Demo em Vídeo
+
+**[▶ Ver demonstração no YouTube](https://youtu.be/6HwvSka0XgI)**
 
 ---
 

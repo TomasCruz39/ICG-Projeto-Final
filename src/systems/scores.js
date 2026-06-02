@@ -3,6 +3,7 @@
 const SCORE_KEY = "icg-mini-golf-scores-v1";
 let scores = {};
 
+// Lê as pontuações guardadas do localStorage; devolve objeto vazio se não existirem
 function loadScores() {
     try {
         const raw = localStorage.getItem(SCORE_KEY);
@@ -14,6 +15,7 @@ function loadScores() {
     }
 }
 
+// Persiste o objeto de pontuações no localStorage em formato JSON
 function saveScores() {
     try {
         localStorage.setItem(SCORE_KEY, JSON.stringify(scores));
@@ -22,6 +24,7 @@ function saveScores() {
     }
 }
 
+// Inicializa o módulo carregando os recordes persistidos (chamado no arranque do jogo)
 function initScores() {
     scores = loadScores();
 }
@@ -32,6 +35,7 @@ function getMapScores(mapIndex) {
     return Array.isArray(list) ? list : [];
 }
 
+// Devolve apenas o melhor (menor) número de tacadas para um mapa, ou null se sem recorde
 function getBestScore(mapIndex) {
     const list = getMapScores(mapIndex);
     return list.length ? list[0] : null;

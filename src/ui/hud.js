@@ -4,6 +4,7 @@ import { hud } from "../core/dom.js";
 import { game, mapNames, ball } from "../core/state.js";
 import { getBestScore } from "../systems/scores.js";
 
+// Reconstrói o HTML do HUD a cada frame com o estado atual do jogo (tacadas, força, mapa, recorde)
 function updateHUD() {
     const best = getBestScore(game.currentMap);
     const bestLabel = best ? `${best}` : "--";
